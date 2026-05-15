@@ -1,0 +1,75 @@
+name: Upstream sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  rebase:
+    name: Rebase custom branch onto Molly upstream
+    runs-on: ubuntu-latest
+
+    env:
+      CUSTOM_BRANCH: custom/main
+      UPDATE_BRANCH: automation/upstream-sync
+      UPSTREAM_REPO: mollyim/mollyim-android
+      UPSTREAM_BRANCH: main
+
+    steps:
+      - name: Checkout custom branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CUSTOM_BRANCH }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config rerere.enabled true
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream "${UPSTREAM_BRANCH}"
+
+      - name: Stop when already current
+        id: current
+        run: |
+          if git merge-base --is-ancestor "upstream/${UPSTREAM_BRANCH}" HEAD; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rebase onto upstream
+        if: steps.current.outputs.current == 'false'
+        run: |
+          git switch -c "${UPDATE_BRANCH}"
+          git rebase "upstream/${UPSTREAM_BRANCH}"
+
+      - name: Push update branch
+        if: steps.current.outputs.current == 'false'
+        run: git push --force-with-lease origin "${UPDATE_BRANCH}"
+
+      - name: Open or update pull request
+        if: steps.current.outputs.current == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing="$(gh pr list --head "${UPDATE_BRANCH}" --base "${CUSTOM_BRANCH}" --json number --jq '.[0].number')"
+          body="Automated rebase of ${CUSTOM_BRANCH} onto ${UPSTREAM_REPO}:${UPSTREAM_BRANCH}.
+
+          Merge this PR after build/test checks pass. If this workflow failed before opening a PR, run fork-tools/update-from-upstream.ps1 locally and resolve conflicts."
+
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "Sync Molly upstream into custom/main" --body "$body"
+          else
+            gh pr create --base "${CUSTOM_BRANCH}" --head "${UPDATE_BRANCH}" --title "Sync Molly upstream into custom/main" --body "$body"
+          fi
+
