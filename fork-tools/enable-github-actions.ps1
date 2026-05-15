@@ -9,7 +9,13 @@ if (-not (Test-Path $workflow)) {
 
 $status = git status --porcelain
 $allowed = "?? $workflow"
-if ($status -and (($status -split "`n" | Where-Object { $_.Trim() -ne $allowed }).Count -gt 0)) {
+$unexpected = @(
+  $status -split "`n" |
+    Where-Object { $_.Trim() } |
+    Where-Object { $_.Trim().Replace("\", "/") -ne $allowed }
+)
+
+if ($unexpected.Count -gt 0) {
   throw "Commit or stash unrelated changes before enabling the workflow."
 }
 
