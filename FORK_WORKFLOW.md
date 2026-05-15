@@ -13,11 +13,18 @@ Keep custom changes as small, focused commits. When upstream changes land, Git
 can usually replay those commits automatically. If a conflict happens, resolve it
 once; `git rerere` is enabled locally so Git can remember the resolution.
 
-## Daily update path
+## Update path
 
-GitHub Actions runs `.github/workflows/upstream-sync.yml` on a schedule and on
-manual dispatch. It fetches `mollyim/mollyim-android:main`, rebases
-`custom/main` onto it, and opens or updates an `automation/upstream-sync` pull
+The local scripts are active immediately. A GitHub Actions workflow is prepared
+at `.github/workflows/upstream-sync.yml`, but GitHub requires the `workflow`
+OAuth scope before that file can be pushed. After refreshing the scope once, run:
+
+```powershell
+.\fork-tools\enable-github-actions.ps1
+```
+
+The workflow will then fetch `mollyim/mollyim-android:main`, rebase
+`custom/main` onto it, and open or update an `automation/upstream-sync` pull
 request when the rebase succeeds.
 
 If the workflow fails, upstream changed the same area as your customization. In
@@ -50,4 +57,3 @@ Start a feature branch:
 - Put unrelated ideas on separate branches.
 - Rebase feature branches onto `custom/main` before merging them.
 - Let CI/open PRs be the place where upstream updates are reviewed.
-
